@@ -1,0 +1,8 @@
+// custom_service.gatt
+PRIMARY_SERVICE, 4ae60001-a1ad-46b0-8234-88a23ad055b9
+
+// Charakterystyka do zapisu (odpowiednik c1)
+CHARACTERISTIC, 4ae60002-a1ad-46b0-8234-88a23ad055b9, WRITE | DYNAMIC
+
+// Charakterystyka do odczytu i powiadomień (odpowiednik c2)
+CHARACTERISTIC, 4ae60003-a1ad-46b0-8234-88a23ad055b9, READ | NOTIFY | DYNAMIC
