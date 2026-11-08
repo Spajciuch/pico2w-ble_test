@@ -1,7 +1,24 @@
 #include <Arduino.h>
 #include <BLE.h>
 
-String test_convert(String s);
+enum instruction_code : uint8_t {
+    VOL_UP = 1,
+    VOL_DWN = 2,
+    VOL_SET = 3,
+    FREQ_UP = 4,
+    FREQ_DWN = 5,
+    FREQ_SET = 6,
+    FREQ_PRESET = 7,
+    FREQ_SET_PRESET = 8,
+    FREQ_SCAN_UP = 9,
+    FREQ_SCAN_DWN = 10,
+    GET_RSSI = 11,
+    GET_RDS = 12,
+    GET_FREQ = 13,
+    GET_RSSI_RDS = 14,
+    TOGGLE_OLED = 15,
+    ERROR = 16
+};
 
 struct ble_header {
     uint8_t version;
@@ -9,7 +26,8 @@ struct ble_header {
     uint8_t length;
 };
 
-ble_header decode_header(uint8_t * header);
+ble_header decode_header(uint8_t *header);
+void handle_instruction(ble_header header, const uint8_t *payload);
 
 class BLECustomService : public BLEService, public BLECharacteristicCallbacks, public BLEServerCallbacks {
   public:
@@ -45,11 +63,12 @@ class BLECustomService : public BLEService, public BLECharacteristicCallbacks, p
         Serial.print(len);
         Serial.print(" B): ");
 
-        uint8_t raw_header[2]; // 2 bajty
+        uint8_t header_bytes[2]; // 2 bajty
+        const uint8_t *payload = data + 2;
 
         for (size_t i = 0; i < len; i++) {
             if (i < 2) {
-              raw_header[i] = data[i];
+                header_bytes[i] = data[i];
             }
 
             if (data[i] < 0x10)
@@ -58,7 +77,7 @@ class BLECustomService : public BLEService, public BLECharacteristicCallbacks, p
             Serial.print(" ");
         }
 
-        ble_header header = decode_header(raw_header);
+        ble_header header = decode_header(header_bytes);
 
         Serial.println();
 
@@ -68,6 +87,8 @@ class BLECustomService : public BLEService, public BLECharacteristicCallbacks, p
         Serial.println(header.code);
         Serial.print("LEN: ");
         Serial.println(header.length);
+
+        handle_instruction(header, payload);
     }
 
     void onConnect(BLEServer *s) {
@@ -99,13 +120,74 @@ void loop() {
     // svc.out("OK");
 }
 
-ble_header decode_header(uint8_t * header)
-{
-  ble_header decoded;
+void handle_instruction(ble_header header, const uint8_t *payload) {
+    switch (static_cast<instruction_code>(header.code)) {
+    case VOL_UP:
+        Serial.println("GŁOŚNOŚĆ W GÓRE");
+        break;
+    case VOL_DWN:
+        Serial.println("GŁOŚĆNOŚĆ W DÓŁ");
+        break;
+    case VOL_SET: {
+        uint8_t volume = payload[0];
+        Serial.print("USTAW GŁOŚNOŚĆ NA: ");
+        Serial.println(volume);
+        break;
+    }
+    case FREQ_UP:
+        Serial.println("GŁOŚNOŚĆ W GÓRĘ");
+        break;
+    case FREQ_DWN:
+        Serial.println("GŁOŚNOŚĆ W DÓŁ");
+        break;
+    case FREQ_SET: {
+        uint16_t frequency = ((payload[0] << 8) | payload[1]) * 10;
+        Serial.print("Ustaw częstotliwość na: ");
+        Serial.println(frequency);
+        break;
+    }
+    case FREQ_PRESET: {
+        uint8_t preset = payload[0];
+        Serial.print("Ustaw preset: ");
+        Serial.println(preset);
+        break;
+    }
+    case FREQ_SET_PRESET: {
+        uint16_t frequency = (((payload[0] & 0x7) << 8) | payload[1]) * 10;
+        uint8_t preset = payload[0] >> 3;
 
-  decoded.version = (header[0] >> 5) & 0x07;
-  decoded.code = header[0] & 0x1F;
-  decoded.length = header[1];
+        Serial.print("USTAW ");
+        Serial.print(frequency);
+        Serial.print(" NA PRESECIE: ");
+        Serial.println(preset);
+        break;
+    }
+    case FREQ_SCAN_UP:
+        Serial.println("SKANUJ W GÓRĘ");
+        break;
+    case FREQ_SCAN_DWN:
+        Serial.println("SKANUJ W DÓŁ");
+        break;  
+    case GET_RSSI:
+        Serial.println("ZAŻĄDANO RSSI");
+        break;
+    case GET_RDS:
+        Serial.println("ZAŻĄDANO RDS");
+        break;
+    case GET_FREQ:
+        Serial.println("ZAŻĄDANO CZĘSTOTLIWOŚCI");
+        break;
+    case GET_RSSI_RDS:
+        Serial.println("ZAŻĄDANO CZĘSTOTLIWOŚCI I RDS'a");
+    }
+}
 
-  return decoded;
+ble_header decode_header(uint8_t *header) {
+    ble_header decoded;
+
+    decoded.version = (header[0] >> 5) & 0x07;
+    decoded.code = header[0] & 0x1F;
+    decoded.length = header[1];
+
+    return decoded;
 }
