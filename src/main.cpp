@@ -36,7 +36,7 @@ struct RadioStatus {
     uint8_t volume;
     uint8_t rssi;
     uint16_t frequency;
-    char RDS[8];
+    char RDS[9];
 };
 
 struct ble_header {
@@ -47,19 +47,20 @@ struct ble_header {
 
 ble_header decode_header(uint8_t *header);
 void handle_instruction(ble_header header, const uint8_t *payload);
+uint16_t encode_header(ble_header header);
 
 class BLECustomService : public BLEService, public BLECharacteristicCallbacks, public BLEServerCallbacks {
   public:
     BLECustomService() : BLEService(BLEUUID("e06e1f61-3893-4bab-8711-42eedbbcb017")) {
         status_c = new BLECharacteristic(BLEUUID("01d3e07d-515c-428f-9743-f1fd718a275b"), BLERead | BLENotify, "Status of the radio player");
         instruction_c = new BLECharacteristic(BLEUUID("d0451060-d333-461e-9ecc-1ad71396c6a5"), BLEWrite, "Instructions");
-        // Have the characteristic call this class when something happens
+
         status_c->setCallbacks(this);
         instruction_c->setCallbacks(this);
-        // Give some default values
+
         status_c->setValue(String("Radio status"));
         instruction_c->setValue(String("Instructions"));
-        // Add them to the service
+
         addCharacteristic(status_c);
         addCharacteristic(instruction_c);
     }
@@ -139,7 +140,7 @@ void setup1() {
     status_queue = xQueueCreate(16, sizeof(RadioStatus));
 }
 
-void loop() {
+void loop() { // SYMULOWANY RDZEŃ BLE
     RadioStatus received_stauts;
 
     if (xQueueReceive(status_queue, &received_stauts, 0) == pdTRUE) {
@@ -149,101 +150,131 @@ void loop() {
             Serial.print("Wysyłam: ");
             Serial.println(received_stauts.rssi);
             break;
+        case GET_RDS:
+            Serial.print("Wysyłam: ");
+            Serial.println(received_stauts.RDS); // tu operacja BLE
+            break;
+        case GET_FREQ:
+            Serial.print("Wysyłam: ");
+            Serial.println(received_stauts.frequency);
+            break;
+        case GET_RSSI_RDS:
+            Serial.print("Wysyłam: ");
+            Serial.print(received_stauts.rssi);
+            Serial.print(" ");
+            Serial.println(received_stauts.RDS);
         }
     }
 }
 
-void loop1() {
+void loop1() { // SYMULOWANY RDZEŃ RADIOWY
     Instruction received_instruction;
     if (xQueueReceive(instruction_queue, &received_instruction, 0) == pdTRUE) {
-        RadioStatus status;
+        RadioStatus status{};
+        status.id = received_instruction.id;
 
         switch (received_instruction.id) {
-        case GET_RSSI: 
-            status.id = GET_RSSI;
+        case GET_RSSI:
             status.rssi = 70;
-
             xQueueSend(status_queue, &status, 0);
             break;
-        
+
         case GET_RDS:
-            status.RDS = "RADIOPIK";
+            strlcpy(status.RDS, "RadioPIK", 9);
+            xQueueSend(status_queue, &status, 0);
+            break;
+
+        case GET_FREQ:
+            status.frequency = 10710;
+            xQueueSend(status_queue, &status, 0);
+            break;
+
+        case GET_RSSI_RDS:
+            strlcpy(status.RDS, "MELO", 9);
+            status.rssi = 70;
+
             break;
         }
     }
 }
 
 void handle_instruction(ble_header header, const uint8_t *payload) {
+    Instruction request{};
+    request.id = static_cast<instruction_code>(header.code);
+
     switch (static_cast<instruction_code>(header.code)) {
     case VOL_UP:
-            Serial.println("GŁOŚNOŚĆ W GÓRE");
-            break;
-        case VOL_DWN:
-            Serial.println("GŁOŚĆNOŚĆ W DÓŁ");
-            break;
-        case VOL_SET: {
-            uint8_t volume = payload[0];
-            Serial.print("USTAW GŁOŚNOŚĆ NA: ");
-            Serial.println(volume);
-            break;
-        }
-        case FREQ_UP:
-            Serial.println("GŁOŚNOŚĆ W GÓRĘ");
-            break;
-        case FREQ_DWN:
-            Serial.println("GŁOŚNOŚĆ W DÓŁ");
-            break;
-        case FREQ_SET: {
-            uint16_t frequency = ((payload[0] << 8) | payload[1]) * 10;
-            Serial.print("Ustaw częstotliwość na: ");
-            Serial.println(frequency);
-            break;
-        }
-        case FREQ_PRESET: {
-            uint8_t preset = payload[0];
-            Serial.print("Ustaw preset: ");
-            Serial.println(preset);
-            break;
-        }
-        case FREQ_SET_PRESET: {
-            uint16_t frequency = (((payload[0] & 0x7) << 8) | payload[1]) * 10;
-            uint8_t preset = payload[0] >> 3;
+        Serial.println("GŁOŚNOŚĆ W GÓRE");
+        break;
+    case VOL_DWN:
+        Serial.println("GŁOŚĆNOŚĆ W DÓŁ");
+        break;
+    case VOL_SET: {
+        uint8_t volume = payload[0];
+        Serial.print("USTAW GŁOŚNOŚĆ NA: ");
+        Serial.println(volume);
+        break;
+    }
+    case FREQ_UP:
+        Serial.println("GŁOŚNOŚĆ W GÓRĘ");
+        break;
+    case FREQ_DWN:
+        Serial.println("GŁOŚNOŚĆ W DÓŁ");
+        break;
+    case FREQ_SET: {
+        uint16_t frequency = ((payload[0] << 8) | payload[1]) * 10;
+        Serial.print("Ustaw częstotliwość na: ");
+        Serial.println(frequency);
+        break;
+    }
+    case FREQ_PRESET: {
+        uint8_t preset = payload[0];
+        Serial.print("Ustaw preset: ");
+        Serial.println(preset);
+        break;
+    }
+    case FREQ_SET_PRESET: {
+        uint16_t frequency = (((payload[0] & 0x7) << 8) | payload[1]) * 10;
+        uint8_t preset = payload[0] >> 3;
 
-            Serial.print("USTAW ");
-            Serial.print(frequency);
-            Serial.print(" NA PRESECIE: ");
-            Serial.println(preset);
-            break;
-        }
-        case FREQ_SCAN_UP:
-            Serial.println("SKANUJ W GÓRĘ");
-            break;
-        case FREQ_SCAN_DWN:
-            Serial.println("SKANUJ W DÓŁ");
-            break;
-        case GET_RSSI:
-            Serial.println("ZAŻĄDANO RSSI");
-            Instruction rssi_request;
-            rssi_request.id = GET_RSSI;
-            xQueueSend(instruction_queue, &rssi_request, 0);
-            break;
-        case GET_RDS:
-            Serial.println("ZAŻĄDANO RDS");
-            break;
-        case GET_FREQ:
-            Serial.println("ZAŻĄDANO CZĘSTOTLIWOŚCI");
-            break;
-        case GET_RSSI_RDS:
-            Serial.println("ZAŻĄDANO CZĘSTOTLIWOŚCI I RDS'a");
-        }
+        Serial.print("USTAW ");
+        Serial.print(frequency);
+        Serial.print(" NA PRESECIE: ");
+        Serial.println(preset);
+        break;
+    }
+    case FREQ_SCAN_UP:
+        Serial.println("SKANUJ W GÓRĘ");
+        break;
+    case FREQ_SCAN_DWN:
+        Serial.println("SKANUJ W DÓŁ");
+        break;
+    case GET_RSSI: // BRAK KONIECZNOŚCI OBSŁUGI
+        Serial.println("ZAŻĄDANO RSSI");
+        break;
+    case GET_RDS: // BRAK KONIECZNOŚCI OBSŁUGI
+        Serial.println("ZAŻĄDANO RDS");
+        break;
+    case GET_FREQ: // BRAK KONIECZNOŚCI OBSŁUGI
+        Serial.println("ZAŻĄDANO CZĘSTOTLIWOŚCI");
+        break;
+    case GET_RSSI_RDS: // BRAK KONIECZNOŚCI OBSŁUGI
+        Serial.println("ZAŻĄDANO CZĘSTOTLIWOŚCI I RDS'a");
     }
 
-    ble_header decode_header(uint8_t *header) {
-        ble_header decoded;
+    xQueueSend(instruction_queue, &request, 0);
+}
 
-        decoded.version = (header[0] >> 5) & 0x07;
-        decoded.code = header[0] & 0x1F;
-        decoded.length = header[1];
+ble_header decode_header(uint8_t *header) {
+    ble_header decoded{};
 
-        return decoded;
-    }
+    decoded.version = (header[0] >> 5) & 0x07;
+    decoded.code = header[0] & 0x1F;
+    decoded.length = header[1];
+
+    return decoded;
+}
+
+uint16_t encode_header(ble_header header) {
+
+}
