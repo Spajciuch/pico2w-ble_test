@@ -36,7 +36,7 @@ struct RadioStatus {
     uint8_t volume;
     uint8_t rssi;
     uint16_t frequency;
-    char RDS[9];
+    char rds[9];
 };
 
 struct ble_header {
@@ -47,7 +47,7 @@ struct ble_header {
 
 ble_header decode_header(uint8_t *header);
 void handle_instruction(ble_header header, const uint8_t *payload);
-uint16_t encode_header(ble_header header);
+uint16_t encode_frame(ble_header header);
 
 class BLECustomService : public BLEService, public BLECharacteristicCallbacks, public BLEServerCallbacks {
   public:
@@ -142,7 +142,7 @@ void setup1() {
 
 void loop() { // SYMULOWANY RDZEŃ BLE
     RadioStatus received_stauts;
-
+    // jakiś tam obiekt do trzymania odpowiedzi, od razu ustawiamy mu kod odpowiedzi jako received_status.id
     if (xQueueReceive(status_queue, &received_stauts, 0) == pdTRUE) {
 
         switch (received_stauts.id) {
@@ -152,7 +152,7 @@ void loop() { // SYMULOWANY RDZEŃ BLE
             break;
         case GET_RDS:
             Serial.print("Wysyłam: ");
-            Serial.println(received_stauts.RDS); // tu operacja BLE
+            Serial.println(received_stauts.rds); // tu operacje BLE
             break;
         case GET_FREQ:
             Serial.print("Wysyłam: ");
@@ -162,7 +162,9 @@ void loop() { // SYMULOWANY RDZEŃ BLE
             Serial.print("Wysyłam: ");
             Serial.print(received_stauts.rssi);
             Serial.print(" ");
-            Serial.println(received_stauts.RDS);
+            Serial.println(received_stauts.rds);
+        default:
+            // wyślij niezmieniony obiekt do zakodowania, może kolejny struct?
         }
     }
 }
@@ -180,7 +182,7 @@ void loop1() { // SYMULOWANY RDZEŃ RADIOWY
             break;
 
         case GET_RDS:
-            strlcpy(status.RDS, "RadioPIK", 9);
+            strlcpy(status.rds, "RadioPIK", 9);
             xQueueSend(status_queue, &status, 0);
             break;
 
@@ -190,7 +192,7 @@ void loop1() { // SYMULOWANY RDZEŃ RADIOWY
             break;
 
         case GET_RSSI_RDS:
-            strlcpy(status.RDS, "MELO", 9);
+            strlcpy(status.rds, "MELO", 9);
             status.rssi = 70;
 
             break;
@@ -275,6 +277,8 @@ ble_header decode_header(uint8_t *header) {
     return decoded;
 }
 
-uint16_t encode_header(ble_header header) {
-
+uint16_t encode_frame(ble_header header) {
+    // trzeba wziąć wersję, przesunąć ją na początek 16bitowej liczby
+    // wziąć kod instrukcji i wpisać go za wersją
+    // 8 najmłodszych bitów ustawić jako długość payloadu, obliczana na podstawie komendy danych, zmiana nazwy z encode header na create frame albo coś takiego
 }
